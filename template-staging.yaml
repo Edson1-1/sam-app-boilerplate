@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sam-app
+
+  Sample SAM Template for sam-app
+  
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30 # we can set default timeout of all lambda functions here
+
+
+Resources:
+
+  Lambda1Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: api
+  
+  Lambda2Sqs:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 65 # should be greater that lambda timeout
+
+  Lambda1:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Environment:
+        Variables:
+          SQS_URL: !Ref Lambda2Sqs  # Gets SQS Queue URL 
+      Events:
+        Lambda1ApiProxy:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId:
+              Ref: Lambda1Api
+    Metadata:
+      DockerTag: nodejs14.x-v1
+      DockerContext: ./lambda-1
+      Dockerfile: Dockerfile
+  
+  Lambda2:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60 #manually overriding function timeout
+      Events:
+        lambda2invoker:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt Lambda2Sqs.Arn
+            BatchSize: 1
+    Metadata:
+      DockerTag: nodejs14.x-v1
+      DockerContext: ./lambda-2
+      Dockerfile: Dockerfile
+   
+
